@@ -1,0 +1,20 @@
+# Bağımlılıklar
+node_modules/
+
+# Electron derleme çıktısı
+dist/
+build/
+
+# Ortam değişkenleri
+.env
+.env.local
+
+# Editör / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Loglar
+*.log
+npm-debug.log*

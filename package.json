@@ -1,0 +1,35 @@
+{
+  "name": "a1-almanca",
+  "productName": "A1 Almanca",
+  "version": "1.0.0",
+  "description": "Almanca A1 kelime ezber uygulaması — Leitner sistemi, listeler ve A1 hikâyeleri",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.a1almanca.app",
+    "productName": "A1 Almanca",
+    "files": [
+      "main.js",
+      "app/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "app/assets/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "app/assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "app/assets/icon.png"
+    }
+  }
+}
