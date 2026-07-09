@@ -1,6 +1,9 @@
 # Bağımlılıklar
 node_modules/
 
+# Vercel CLI
+.vercel/
+
 # Electron derleme çıktısı
 dist/
 build/
@@ -18,3 +21,6 @@ Thumbs.db
 # Loglar
 *.log
 npm-debug.log*
+
+# Local Netlify folder
+.netlify

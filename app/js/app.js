@@ -2,7 +2,7 @@
 const N = WORDS.length;
 const BOX_DAYS = [0,0,1,3,7,14];
 const MASTER_BOX = 5;
-const MIN_REPS = 10;        // bir kelime "öğrenildi" olmadan önce en az 10 kez sorulur
+const MIN_REPS = 50;        // bir kelime "öğrenildi" olmadan önce en az 50 kez sorulur
 const WRONG_TRIGGER = 5;    // üst üste 5 hata → o kelimenin grubu tekrar sorulur
 const KEY = 'a1de_v2';
 let S=null, mem=false;
@@ -129,7 +129,7 @@ function renderHome(){
     `<b>Sıra:</b> Kelimeler alfabetik değil, sana özel <b>rastgele</b> sırayla gelir. Oturum sonunda kartlar birbirini kovalamasın diye aralara <b>bonus tekrar kartları</b> karışır.<br>`+
     `<b>Tempo:</b> Günde ${S.newPerDay} yeni kelime → yeni kelimeler <b>~${daysAll} günde</b> biter.<br>`+
     `<b>Oturum içi tekrar (${iname}):</b> yeni kelime <b>${C.yeni} doğru</b>, bilemediğin kelime <b>${C.yanlis} üst üste doğru</b>, zor bildiğin <b>${C.zor} doğru</b> gerektirir.<br>`+
-    `<b>10 tekrar kuralı:</b> Bir kelime hayatı boyunca <b>en az ${MIN_REPS} kez</b> sorulmadan "öğrenildi" sayılmaz — kutuları erken bitirse bile geri gönderilir.<br>`+
+    `<b>${MIN_REPS} tekrar kuralı:</b> Bir kelime hayatı boyunca <b>en az ${MIN_REPS} kez</b> sorulmadan "öğrenildi" sayılmaz — kutuları erken bitirse bile geri gönderilir.<br>`+
     `<b>Grup tekrarı:</b> Bir kelimeyi üst üste <b>${WRONG_TRIGGER} kez</b> bilemezsen, aynı türden (fiil, isim…) kelimeler kuyruğa geri eklenir ve o grubu baştan tararsın.<br>`+
     `<b>Günler arası:</b> 12 saat → 1 gün → 3 gün → 1 hafta → 2 hafta. Her hata kelimeyi 1. kutuya döndürür.`;
   document.querySelectorAll('#seg-new button').forEach(b=>b.classList.toggle('on',+b.dataset.v===S.newPerDay));
@@ -241,7 +241,16 @@ function nextCard(){
   if(g.plural) chips+=`<span class="chip">çoğul: die ${g.plural}</span>`;
   for(const nt of g.notes){ const c=caseNote(nt); if(c) chips+=`<span class="chip gram">${c}</span>`; }
   $('a-chips').innerHTML=chips;
-  $('a-exde').innerHTML=highlightWord(w.gd,g.base);
+  const exDe=highlightWord(w.gd,g.base);
+  if(curDir==='de'){
+    // DE→TR: Almanca örnek cümleyi soru tarafında göster; cevapta sadece Türkçesi açılır
+    $('c-example').innerHTML=exDe; $('c-example').style.display='block';
+    $('a-exde').style.display='none'; $('a-exde').innerHTML='';
+  }else{
+    // TR→DE: Almanca cümle cevabı ele vermesin diye soruda gizli, cevapta görünür
+    $('c-example').style.display='none'; $('c-example').innerHTML='';
+    $('a-exde').style.display=''; $('a-exde').innerHTML=exDe;
+  }
   $('a-extr').textContent=w.gt;
 
   $('c-answer').classList.remove('show');
@@ -281,7 +290,7 @@ async function grade(g){
     else{
       S.box[i]=Math.min(S.box[i]+1, MASTER_BOX+1); sessUp++;
       if(isMastered(i)){
-        if(S.seen[i] < MIN_REPS){                 // 10 tekrar kuralı
+        if(S.seen[i] < MIN_REPS){                 // 50 tekrar kuralı (MIN_REPS)
           S.box[i]=4; S.due[i]=Date.now()+7*86400000;
           toast('Neredeyse! '+display(WORDS[i])+' için '+(MIN_REPS-S.seen[i])+' tekrar daha gerek');
         }else{ S.due[i]=0; toast('★ Öğrenildi: '+(WORDS[i].a?WORDS[i].a+' ':'')+display(WORDS[i])); }
