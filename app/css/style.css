@@ -63,6 +63,9 @@ header{display:flex;align-items:baseline;justify-content:space-between;padding:2
 .card-main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6px 18px 14px;gap:5px;overflow-y:auto}
 .art{font-family:'Fraunces',serif;font-size:22px;font-weight:600;line-height:1}
 .art.der{color:var(--der)}.art.die{color:var(--die)}.art.das{color:var(--das)}
+/* Kartta büyük renkli artikel rozeti (yalnızca DE→TR yönünde) */
+.art.artbig{font-size:clamp(30px,11vw,52px);font-weight:700;padding:4px 24px;border-radius:99px;line-height:1.15;margin-bottom:2px}
+.art.artbig.der{background:#E4EDFF}.art.artbig.die{background:#FDE8E8}.art.artbig.das{background:#E4F6EA}
 .headword{font-family:'Fraunces',Georgia,serif;font-size:clamp(26px,8.5vw,40px);font-weight:700;line-height:1.12;overflow-wrap:anywhere}
 .taphint{font-size:12px;color:var(--ink2);font-weight:600;margin-top:16px;opacity:.8}
 .qexample{display:none;margin-top:14px;font-style:italic;font-size:15px;line-height:1.55;color:var(--ink);max-width:340px;width:100%;background:#FAF9F4;border:1px solid var(--line);border-radius:12px;padding:11px 14px}
@@ -89,6 +92,32 @@ header{display:flex;align-items:baseline;justify-content:space-between;padding:2
 .swipe-hints.hidden{visibility:hidden}
 .showrow{margin-top:12px}
 .showbtn{width:100%;padding:15px;border:none;border-radius:14px;background:var(--ink);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Inter'}
+
+/* ARTIKEL */
+.akcard{background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 4px 18px rgba(27,36,48,.08);padding:12px 16px 18px;min-height:220px;display:flex;flex-direction:column}
+.akq{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);text-align:center;margin-top:14px}
+.akword{font-family:'Fraunces',Georgia,serif;font-size:clamp(30px,10vw,46px);font-weight:700;text-align:center;margin:10px 0 6px;overflow-wrap:anywhere;line-height:1.15}
+.akbtns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+.akbtn{padding:18px 4px;border:2px solid;border-radius:14px;background:var(--card);font-family:'Fraunces',serif;font-size:24px;font-weight:700;cursor:pointer;line-height:1}
+.akbtn.der{color:var(--der);border-color:var(--der)}
+.akbtn.die{color:var(--die);border-color:var(--die)}
+.akbtn.das{color:var(--das);border-color:var(--das)}
+.akbtn:active{transform:scale(.97)}
+.akbtn:disabled{cursor:default;opacity:.5}
+.akbtn.der.correct{background:var(--der);color:#fff;opacity:1}
+.akbtn.die.correct{background:var(--die);color:#fff;opacity:1}
+.akbtn.das.correct{background:var(--das);color:#fff;opacity:1}
+.akbtn.wrong{background:#FDE8E8;border-color:var(--bad);opacity:1}
+.akfb{display:none;margin-top:14px;animation:fin .25s ease}
+.akres{text-align:center;font-size:16px;font-weight:700;margin-bottom:10px;line-height:1.3}
+.akres.good{color:var(--ok)}.akres.bad{color:var(--bad)}
+.akres .art{font-size:16px;font-weight:700}
+.akmeta{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.akhint{margin-top:10px;background:#F3EEDF;color:#7A5C00;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;text-align:center;line-height:1.4}
+.akex{margin-top:10px;background:#FAF9F4;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.akex .de{font-style:italic;font-size:14.5px;line-height:1.5}
+.akex .de b{font-style:normal;font-weight:700;color:var(--der)}
+.akex .tr{font-size:13px;color:var(--ink2);line-height:1.5;margin-top:3px}
 
 /* DONE */
 .done-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px}
@@ -158,4 +187,24 @@ header{display:flex;align-items:baseline;justify-content:space-between;padding:2
 
 .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:99px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:50;max-width:90%;text-align:center}
 .toast.show{opacity:1}
+
+/* LISTE GRAMER KARTI (kelimeye tıklayınca açılır) */
+.witem{border-bottom:1px solid var(--line)}
+.witem:last-child{border-bottom:none}
+.wrow{border-bottom:none;cursor:pointer;transition:background .15s}
+.wrow:active{background:#F5F3EC}
+.witem.open>.wrow{background:#FAF9F4}
+.wchev{flex-shrink:0;color:var(--ink2);font-size:20px;font-weight:700;line-height:1;opacity:.5;transition:transform .2s,opacity .2s}
+.witem.open .wchev{transform:rotate(90deg);opacity:.9}
+.wgram{display:none;padding:2px 16px 16px}
+.witem.open .wgram{display:block;animation:fin .25s ease}
+.wgram .chips{justify-content:flex-start;margin:0 0 10px}
+.gramrules{display:flex;flex-direction:column;gap:7px;margin-bottom:10px}
+.gr{font-size:13px;line-height:1.55;color:var(--ink)}
+.gr .art{font-size:13px;font-weight:700}
+.wgram .exbox{max-width:none;margin-top:0}
+.wgram .exbox .de b{font-style:normal;font-weight:700;color:var(--der)}
+.wclose{margin-top:12px;background:none;border:1px solid var(--line);color:var(--ink2);font-family:'Inter';font-size:12px;font-weight:600;padding:7px 14px;border-radius:99px;cursor:pointer}
+.wclose:active{transform:scale(.98)}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

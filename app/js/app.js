@@ -46,6 +46,18 @@ function parseWord(w){
   return {base, plural, notes, refl};
 }
 const GENDER={der:['gder','der — maskulin (eril)'],die:['gdie','die — feminin (dişil)'],das:['gdas','das — neutrum (nötr)']};
+/* A1 son-ek kuralları (suffix → artikel). Yüksek kesinlikli; en özel önce.
+   İpucu yalnızca kuralın kelimenin gerçek artikeliyle örtüştüğü durumda gösterilir → istisna yanıltmaz. */
+const ART_RULES=[
+  [/(ung|heit|keit|schaft|tion|tät|ei|ik)$/i,'die','“-{s}” ekiyle biten isimler dişildir (die)'],
+  [/(chen|lein)$/i,'das','“-{s}” küçültme ekidir → daima nötr (das)'],
+  [/(ment|um|ma)$/i,'das','“-{s}” ekiyle biten isimler genelde nötrdür (das)'],
+  [/(ling|ismus|or)$/i,'der','“-{s}” ekiyle biten isimler genelde erildir (der)'],
+];
+function articleRule(base){
+  for(const [re,art,tpl] of ART_RULES){ const m=base.match(re); if(m) return {art, txt:tpl.replace('{s}',m[1])}; }
+  return null;
+}
 function display(w){ const g=parseWord(w); return (g.refl?'sich ':'')+g.base; }
 function highlightWord(s,base){
   const stem=base.replace(/[^\wäöüÄÖÜß]/g,'').slice(0,Math.max(4,base.length-2));
@@ -54,11 +66,70 @@ function highlightWord(s,base){
   return s.replace(re,'<b>$1</b>');
 }
 
+/* ---------- LİSTE GRAMER KARTI ---------- */
+const GTR={der:'eril (maskulin)',die:'dişil (feminin)',das:'nötr (neutrum)'};
+// Ayrılabilir (trennbar) ön ekler — iddia YALNIZCA örnek cümle kanıtıyla yapılır
+const SEP_PREFIXES=['zusammen','zurück','vorbei','weiter','ab','an','auf','aus','bei','ein','mit','nach','vor','weg','zu','los','her','hin','teil','fest','statt','fort'];
+/* Fiil ayrılabilir mi? İnfinitif bilinen ön ekle başlar VE örnek cümle o ön ekle
+   biter (ana cümlede ayrık) → {pre,stem}; aksi hâlde null. "antworten"→"an|tworten"
+   gibi yanlış-pozitifleri, ön ekin cümle SONUNDA olması şartıyla eler. */
+function separableInfo(w, base){
+  const inf=base.toLowerCase(); let pre=null;
+  for(const p of SEP_PREFIXES){ if(inf.startsWith(p) && inf.length>p.length+1 && (!pre||p.length>pre.length)) pre=p; }
+  if(!pre) return null;
+  const gd=(w.gd||'').trim();
+  const re=new RegExp('(^|[\\s(])'+pre+'[.!?…]*$','i');   // ön ek = cümlenin son sözcüğü
+  if(!re.test(gd)) return null;
+  return {pre, stem:base.slice(pre.length)};
+}
+/* Bir kelimenin gramer detay panelini (HTML) üretir — mevcut yardımcıları yeniden kullanır */
+function grammarPanel(i){
+  const w=WORDS[i], g=parseWord(w);
+  // --- chip satırı (ezber kartıyla aynı mantık) ---
+  let chips=`<span class="chip pos">${CATS[w.c]||''}</span>`;
+  if(w.a){ const [cls,txt]=GENDER[w.a]; chips+=`<span class="chip ${cls}">${txt}</span>`; }
+  if(g.plural) chips+=`<span class="chip">çoğul: die ${g.plural}</span>`;
+  if(g.refl) chips+=`<span class="chip gram">dönüşlü · sich</span>`;
+  for(const nt of g.notes){ if(nt==='sich') continue; const c=caseNote(nt); if(c) chips+=`<span class="chip gram">${c}</span>`; }
+  // --- kategoriye özel gramer kuralı cümleleri (hepsi o tür için DOĞRU) ---
+  const R=[];
+  if(w.c==='isim' && w.a){
+    const indef=w.a==='die'?'eine':'ein', akk=w.a==='der'?'den':w.a, rule=articleRule(g.base);
+    R.push(`<b>Cinsiyet:</b> <span class="art ${w.a}">${w.a}</span> ${g.base} — ${GTR[w.a]}. Artikeli her zaman kelimeyle birlikte ezberle.`);
+    if(rule && rule.art===w.a) R.push(`💡 ${rule.txt}.`);
+    if(g.plural) R.push(`<b>Çoğul:</b> die ${g.plural} — çoğulda artikel her zaman <i>die</i> olur.`);
+    R.push(`<b>Belirsiz / belirli:</b> ${indef} ${g.base} · ${w.a} ${g.base}.`);
+    R.push(`<b>Akkusativ (-i hâli):</b> ${akk} ${g.base}. Yalnız <i>der</i> → <i>den</i> olur; <i>die/das</i> ve çoğul değişmez.`);
+  } else if(w.c==='fiil'){
+    R.push(`<b>Fiil (Verb).</b> Ana cümlede çekimli fiil 2. sırada gelir.`);
+    const sep=separableInfo(w, g.base);
+    if(sep) R.push(`<b>Ayrılabilir fiil (trennbar):</b> ${sep.pre}|${sep.stem} — ana cümlede ön ek (<i>${sep.pre}</i>) sona atılır.`);
+    if(g.refl) R.push(`<b>Dönüşlü fiil (reflexiv):</b> <i>sich ${g.base}</i> — özneye göre dönüşlü zamir alır (mich / dich / sich / uns / euch).`);
+    for(const nt of g.notes){ if(nt==='sich') continue; const c=caseNote(nt); if(c) R.push(`<b>Nesne / edat:</b> ${c}.`); }
+  } else if(w.c==='sifat'){
+    R.push(`<b>Karşılaştırma:</b> Komparativ <i>-er</i>, Superlativ <i>am …-sten</i> (schnell → <i>schneller</i> → <i>am schnellsten</i>). Kısa sıfatların çoğu ünlüyü değiştirir: alt → <i>älter</i>, groß → <i>größer</i>. Düzensiz: gut → besser, viel → mehr, gern → lieber.`);
+    R.push(`<b>Sıfat çekimi:</b> İsimden önce artikele ve hâle göre ek alır: <i>der <b>große</b> Mann</i>, <i>ein <b>großes</b> Kind</i>.`);
+  } else if(w.c==='zamir'){
+    R.push(`<b>Zamir (Pronomen).</b> Cümledeki hâline göre biçim değiştirir. Kişi zamiri örn.: ich → <i>mich</i> (Akkusativ) → <i>mir</i> (Dativ).`);
+    for(const nt of g.notes){ const c=caseNote(nt); if(c) R.push(`<b>Hâl:</b> ${c}.`); }
+  } else {
+    for(const nt of g.notes){ const c=caseNote(nt); if(c) R.push(`<b>Hâl:</b> ${c}.`); }
+    R.push(`<b>Edat / Bağlaç.</b> Bağlaçlarda kelime sırasına dikkat: <i>weil, dass</i> yan cümlede fiili sona atar.`);
+  }
+  // --- örnek cümle (verideki doğrulanmış gramer cümlesi) ---
+  const ex=`<div class="exbox"><div class="de">${highlightWord(w.gd,g.base)}</div><div class="tr">${w.gt}</div></div>`;
+  return `<div class="chips">${chips}</div>`+
+         `<div class="gramrules">${R.map(x=>`<div class="gr">${x}</div>`).join('')}</div>`+
+         ex+
+         `<button class="wclose" type="button">Kapat ✕</button>`;
+}
+
 /* ---------- DURUM ---------- */
 function shuffled(n){ const a=[...Array(n).keys()]; for(let k=n-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[a[k],a[j]]=[a[j],a[k]];} return a; }
 function freshState(){
   return {box:new Array(N).fill(-1), due:new Array(N).fill(0), seen:new Array(N).fill(0),
     wrong:new Array(N).fill(0), correct:new Array(N).fill(0),
+    artSeen:new Array(N).fill(0), artWrong:new Array(N).fill(0),
     newPerDay:20, dir:'de', intensity:'yogun', order:shuffled(N),
     read:[], startDate:Date.now(), lastIntro:'', introToday:0};
 }
@@ -73,6 +144,8 @@ function lsSet(v){ try{localStorage.setItem(KEY,v);return true;}catch(e){return 
 function migrate(){
   if(!Array.isArray(S.order)||S.order.length!==N) S.order=shuffled(N);
   if(!Array.isArray(S.correct)||S.correct.length!==N) S.correct=new Array(N).fill(0);
+  if(!Array.isArray(S.artSeen)||S.artSeen.length!==N) S.artSeen=new Array(N).fill(0);
+  if(!Array.isArray(S.artWrong)||S.artWrong.length!==N) S.artWrong=new Array(N).fill(0);
   if(!Array.isArray(S.read)) S.read=[];
   if(!S.intensity) S.intensity='yogun';
 }
@@ -228,7 +301,7 @@ function nextCard(){
     : (S.seen[cur.i]>0 ? S.seen[cur.i]+'/'+MIN_REPS+' tekrar' : '');
 
   if(curDir==='de'){
-    $('c-art').textContent=w.a; $('c-art').className='art '+(w.a||'');
+    $('c-art').textContent=w.a; $('c-art').className='art '+(w.a?'artbig '+w.a:'');
     $('c-word').textContent=display(w);
     $('a-trans').textContent=w.t;
   }else{
@@ -397,9 +470,10 @@ function renderList(){
     const meta = isMastered(i) ? '★ öğrenildi<br>'+S.seen[i]+' tekrar'
       : S.box[i]<0 ? 'başlanmadı'
       : 'Kutu '+(Math.min(S.box[i],5)+1)+'<br>'+S.seen[i]+' tekrar · '+S.wrong[i]+' hata';
-    return `<div class="wrow"><div class="dot" style="background:${dot(i)}"></div>
+    return `<div class="witem"><div class="wrow" data-i="${i}"><div class="dot" style="background:${dot(i)}"></div>
       <div class="wd"><div class="de">${art}<em>${display(w)}</em></div><div class="tr">${w.t}</div></div>
-      <div class="meta">${meta}</div></div>`;
+      <div class="meta">${meta}</div><div class="wchev">›</div></div>
+      <div class="wgram">${grammarPanel(i)}</div></div>`;
   }).join('')+'</div>'+(idx.length>400?'<div class="listinfo" style="margin-top:8px">İlk 400 gösteriliyor — aramayı daraltın.</div>':'');
 }
 $('list-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -408,6 +482,16 @@ $('list-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   renderList();
 });
 $('search').oninput=e=>{ listQ=e.target.value.trim(); renderList(); };
+/* Kelimeye tıkla → gramer kartı aç/kapa (delegasyon; her render'da #list-body kalıcı).
+   Akordeon: yeni kelime açılınca öncekiler kapanır. "Kapat ✕" da kapatır. */
+$('list-body').addEventListener('click', e=>{
+  if(e.target.closest('.wclose')){ const it=e.target.closest('.witem'); if(it) it.classList.remove('open'); return; }
+  const row=e.target.closest('.wrow'); if(!row) return;
+  const item=row.closest('.witem'); if(!item) return;
+  const willOpen=!item.classList.contains('open');
+  $('list-body').querySelectorAll('.witem.open').forEach(x=>{ if(x!==item) x.classList.remove('open'); });
+  item.classList.toggle('open', willOpen);
+});
 
 /* ---------- HİKÂYE ---------- */
 function renderStories(){
@@ -439,6 +523,87 @@ function openStory(k){
 }
 $('btn-sback').onclick=()=>{ renderStories(); show('scr-stories'); };
 
+/* ---------- ARTİKEL (der/die/das) ---------- */
+let AQ=[], aCur=null, aRevealed=false, aDone=0, aCorrect=0, aTotal=0;
+
+function artNouns(){ const o=[]; for(let i=0;i<N;i++) if(WORDS[i].a) o.push(i); return o; }
+
+function renderArtikel(){
+  $('ak-quiz').style.display='none';
+  $('ak-home').style.display='block';
+  const total=artNouns().length;
+  $('ak-hero-sub').textContent='İsmi artikelsiz göster, doğru artikeli seç. '+total+' isim · her turda '+Math.min(15,total)+' soru.';
+  $('ak-plan').innerHTML=
+    `<b>Nasıl çalışır:</b> Renk kodlu 3 buton — <span class="art der">mavi der</span>, <span class="art die">kırmızı die</span>, <span class="art das">yeşil das</span>.<br>`+
+    `Zorlandığın ve hiç sorulmamış isimler önce gelir. Cevaptan sonra cinsiyet, çoğul, örnek cümle ve varsa <b>ek kuralı</b> ipucu gösterilir.<br>`+
+    `<b>Klavye:</b> <b>1/2/3</b> ya da <b>d/f/g</b> ile seç, <b>Enter</b> ile devam et.`;
+}
+
+function buildArtikel(){
+  const wrong=[],fresh=[],rest=[];
+  for(let i=0;i<N;i++){
+    if(!WORDS[i].a) continue;               // sadece isimler (w.a dolu)
+    if(S.artWrong[i]>0) wrong.push(i);      // önce zorlandıkların
+    else if(S.artSeen[i]===0) fresh.push(i);// sonra hiç sorulmamışlar
+    else rest.push(i);
+  }
+  const sh=arr=>shuffled(arr.length).map(k=>arr[k]);   // shuffled() helper'ını kullan
+  const pool=[...sh(wrong),...sh(fresh),...sh(rest)];
+  AQ=pool.slice(0,Math.min(15,pool.length)).map(i=>({i}));
+  aDone=0; aCorrect=0; aTotal=AQ.length;
+}
+
+function akNext(){
+  if(AQ.length===0){ akFinish(); return; }
+  aCur=AQ.shift(); aRevealed=false;
+  const w=WORDS[aCur.i];
+  $('ak-word').textContent=display(w);
+  $('ak-fb').style.display='none'; $('ak-fb').innerHTML='';
+  $('ak-next-row').style.display='none';
+  document.querySelectorAll('#ak-btns .akbtn').forEach(b=>{ b.classList.remove('correct','wrong'); b.disabled=false; });
+  $('ak-tag').textContent = S.artSeen[aCur.i]===0 ? 'Yeni' : (S.artWrong[aCur.i]>0 ? 'Tekrar' : 'Bilinen');
+  $('ak-times').textContent = (aDone+1)+' / '+aTotal;
+  $('aprog-i').style.width=(aDone/aTotal*100)+'%';
+  $('acount').textContent=AQ.length+' kaldı';
+}
+
+async function akGrade(choice){
+  if(aRevealed || !aCur) return;
+  aRevealed=true;
+  const i=aCur.i, w=WORDS[i], g=parseWord(w), correct=w.a, ok=(choice===correct);
+  S.artSeen[i]++;
+  if(ok){ aCorrect++; }
+  else{
+    S.artWrong[i]++;
+    // yanlışı kuyruğa geri ekle — arka arkaya değil (min 2 boşluk)
+    if(AQ.length>2){ const lo=2, hi=Math.min(AQ.length,6); AQ.splice(lo+Math.floor(Math.random()*(hi-lo+1)),0,{i}); }
+    else AQ.push({i});
+    aTotal++;
+  }
+  aDone++;
+  document.querySelectorAll('#ak-btns .akbtn').forEach(b=>{
+    if(b.dataset.a===correct) b.classList.add('correct');
+    if(b.dataset.a===choice && !ok) b.classList.add('wrong');
+    b.disabled=true;
+  });
+  const [cls,label]=GENDER[correct], rule=articleRule(g.base);
+  let html=`<div class="akres ${ok?'good':'bad'}">${ok?'Doğru ✓':'Yanlış ✗'} — <span class="art ${correct}">${correct}</span> ${display(w)}</div>`;
+  html+=`<div class="akmeta"><span class="chip ${cls}">${label}</span>`;
+  if(g.plural) html+=`<span class="chip">çoğul: die ${g.plural}</span>`;
+  html+=`</div>`;
+  if(rule && rule.art===correct) html+=`<div class="akhint">💡 ${rule.txt}</div>`;
+  html+=`<div class="akex"><div class="de">${highlightWord(w.gd,g.base)}</div><div class="tr">${w.gt}</div></div>`;
+  $('ak-fb').innerHTML=html; $('ak-fb').style.display='block';
+  $('ak-next-row').style.display='block';
+  $('aprog-i').style.width=(aDone/aTotal*100)+'%';
+  await saveState();
+}
+
+function akFinish(){
+  toast('Artikel turu bitti — '+aCorrect+' / '+aTotal+' doğru');
+  renderArtikel();
+}
+
 /* ---------- NAVİGASYON ---------- */
 document.querySelectorAll('.tabbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
@@ -446,6 +611,7 @@ document.querySelectorAll('.tabbar button').forEach(b=>b.onclick=()=>{
   if(s==='home'){ renderHome(); show('scr-home'); }
   if(s==='lists'){ renderChips(); renderList(); show('scr-lists'); }
   if(s==='stories'){ renderStories(); show('scr-stories'); }
+  if(s==='artikel'){ renderArtikel(); show('scr-artikel'); }
 });
 $('btn-start').onclick=async()=>{ buildSession(); await saveState(); if(Q.length){ show('scr-sess'); nextCard(); } };
 $('btn-show').onclick=reveal;
@@ -456,7 +622,18 @@ document.querySelectorAll('#seg-new button').forEach(b=>b.onclick=async()=>{ S.n
 document.querySelectorAll('#seg-dir button').forEach(b=>b.onclick=async()=>{ S.dir=b.dataset.v; await saveState(); renderHome(); });
 document.querySelectorAll('#seg-int button').forEach(b=>b.onclick=async()=>{ S.intensity=b.dataset.v; await saveState(); renderHome(); });
 $('btn-reset').onclick=async()=>{ if(confirm('Tüm ilerleme silinsin mi? Bu geri alınamaz.')){ S=freshState(); await saveState(); renderHome(); toast('Sıfırlandı'); } };
+/* Artikel quiz butonları */
+$('ak-start').onclick=()=>{ buildArtikel(); if(AQ.length){ $('ak-home').style.display='none'; $('ak-quiz').style.display='block'; akNext(); } else toast('Sorulacak isim bulunamadı'); };
+$('ak-next').onclick=akNext;
+$('btn-aback').onclick=()=>{ renderArtikel(); };
+$('ak-btns').querySelectorAll('.akbtn').forEach(b=>b.onclick=()=>akGrade(b.dataset.a));
 document.addEventListener('keydown',e=>{
+  if($('scr-artikel').classList.contains('on') && $('ak-quiz').style.display!=='none'){
+    if(aRevealed){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); akNext(); } return; }
+    const m={'1':'der','2':'die','3':'das','d':'der','f':'die','g':'das'};
+    if(m[e.key]){ e.preventDefault(); akGrade(m[e.key]); }
+    return;
+  }
   if(!$('scr-sess').classList.contains('on')) return;
   if(e.key===' '){ e.preventDefault(); reveal(); }
   if(revealed){ if(e.key==='ArrowLeft'||e.key==='1') grade(0);

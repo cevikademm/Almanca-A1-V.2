@@ -139,12 +139,46 @@
   <div class="reader" id="reader"></div>
 </div>
 
+<!-- ============ ARTİKEL ============ -->
+<div class="screen" id="scr-artikel">
+  <div id="ak-home">
+    <div class="hero">
+      <div class="eyebrow">Artikel çalışması</div>
+      <h1 id="ak-hero-title"><span style="color:var(--der)">der</span> · <span style="color:var(--die)">die</span> · <span style="color:var(--das)">das</span></h1>
+      <p id="ak-hero-sub"></p>
+      <button class="startbtn" id="ak-start">Artikel testine başla</button>
+    </div>
+    <div class="section-t">Nasıl çalışır</div>
+    <div class="planbox" id="ak-plan"></div>
+  </div>
+  <div id="ak-quiz" style="display:none">
+    <div class="sess-top">
+      <button class="backbtn" id="btn-aback">←</button>
+      <div class="prog"><i id="aprog-i"></i></div>
+      <div class="sess-count" id="acount"></div>
+    </div>
+    <div class="akcard">
+      <div class="card-tags"><span id="ak-tag"></span><span id="ak-times"></span></div>
+      <div class="akq">Hangi artikel?</div>
+      <div class="akword" id="ak-word"></div>
+      <div class="akfb" id="ak-fb"></div>
+    </div>
+    <div class="akbtns" id="ak-btns">
+      <button class="akbtn der" data-a="der">der</button>
+      <button class="akbtn die" data-a="die">die</button>
+      <button class="akbtn das" data-a="das">das</button>
+    </div>
+    <div class="showrow" id="ak-next-row" style="display:none"><button class="showbtn" id="ak-next">Devam →</button></div>
+  </div>
+</div>
+
 </div>
 
 <nav class="tabbar">
   <button data-scr="home" class="on"><span class="ic">🗂</span>Ezber</button>
   <button data-scr="lists"><span class="ic">📋</span>Listeler</button>
   <button data-scr="stories"><span class="ic">📖</span>Hikâye</button>
+  <button data-scr="artikel"><span class="ic">🎯</span>Artikel</button>
 </nav>
 <div class="toast" id="toast"></div>
 <script src="js/data.js"></script>
