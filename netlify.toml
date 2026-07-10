@@ -1,0 +1,15 @@
+# Netlify yapılandırması — statik site, build yok. Uygulama app/ içinde.
+[build]
+  publish = "app"
+  command = ""
+
+# İçerik türleri ve önbellek
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

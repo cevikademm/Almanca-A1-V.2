@@ -55,8 +55,8 @@ header{display:flex;align-items:baseline;justify-content:space-between;padding:2
 .sess-count{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink2)}
 .deck{position:relative;flex:1;min-height:400px}
 .card-ghost{position:absolute;inset:10px 10px -8px;background:#F1EFE8;border:1px solid var(--line);border-radius:22px;z-index:0}
-.card{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);border-radius:22px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 4px 18px rgba(27,36,48,.08);z-index:1;touch-action:pan-y;will-change:transform;user-select:none}
-.card.anim{transition:transform .28s ease,opacity .28s ease}
+.card{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);border-radius:22px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 4px 18px rgba(27,36,48,.08);z-index:1;touch-action:pan-y;will-change:transform;transform:translateZ(0);backface-visibility:hidden;user-select:none;-webkit-user-select:none}
+.card.anim{transition:transform .24s cubic-bezier(.22,.61,.36,1),opacity .24s ease}
 .ribbon{height:6px;width:100%;background:var(--none);flex-shrink:0}
 .card-tags{display:flex;justify-content:space-between;padding:11px 15px 0;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2)}
 .card-tags .bonus{color:var(--gold)}

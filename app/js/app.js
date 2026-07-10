@@ -160,6 +160,10 @@ async function saveState(first){
   if(lsSet(v)) ok=true;
   if(!ok&&!mem){ mem=true; if(!first) toast('Kayıt yapılamıyor — ilerleme bu oturumla sınırlı'); }
 }
+/* Ertelenmiş kayıt — kart geçişi bittikten (yeni kart boyandıktan) sonra kaydeder,
+   böylece büyük JSON.stringify + localStorage yazımı animasyonu bloklamaz. */
+let _saveT=0;
+function saveSoon(){ if(_saveT) return; _saveT=setTimeout(()=>{ _saveT=0; saveState(); },0); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
 function dayNo(){ return Math.floor((Date.now()-S.startDate)/86400000)+1; }
 function isMastered(i){ return S.box[i]>MASTER_BOX; }
@@ -352,7 +356,7 @@ async function grade(g){
     else{ S.wrong[i]++; S.box[i]=0; failedNow[i]=1; needStreak[i]=Math.min(C.yanlis,2);
           wrongStreak[i]=(wrongStreak[i]||0)+1; cur.kind='rev'; reinsert(cur,3);
           if(wrongStreak[i]>=WRONG_TRIGGER){ wrongStreak[i]=0; groupDrill(i); } }
-    await saveState(); nextCard(); return;
+    nextCard(); saveSoon(); return;
   }
 
   const firstEver = S.box[i]===-1;
@@ -389,7 +393,7 @@ async function grade(g){
     reinsert(cur,3);
     if(wrongStreak[i]>=WRONG_TRIGGER){ wrongStreak[i]=0; groupDrill(i); }
   }
-  await saveState(); nextCard();
+  nextCard(); saveSoon();
 }
 
 function finishSession(){
@@ -401,29 +405,47 @@ function finishSession(){
   show('scr-done');
 }
 
-/* ---------- SWIPE ---------- */
-const card=$('card'); let drag=null;
+/* ---------- SWIPE ----------
+   Sürüklerken takılmayı (jank) önleyen üç önlem:
+   1) DOM referansları önbelleğe alınır → pointermove'da getElementById yok.
+   2) Çizim requestAnimationFrame ile kare başına 1 kez yapılır → paint fırtınası yok.
+   3) translate3d → GPU kompozit katmanı, düzgün 60fps kayma. */
+const card=$('card');
+const stampYes=$('stamp-yes'), stampNo=$('stamp-no');
+let drag=null, dragRaf=0, dragDx=0, dragW=0;
+
+function paintDrag(){
+  dragRaf=0;
+  card.style.transform=`translate3d(${dragDx}px,0,0) rotate(${dragDx*0.05}deg)`;
+  const p=Math.min(1,Math.abs(dragDx)/110);
+  stampYes.style.opacity=dragDx>0?p:0;
+  stampNo.style.opacity=dragDx<0?p:0;
+}
 card.addEventListener('pointerdown',e=>{
-  if(!revealed) return;
-  drag={x:e.clientX,dx:0}; card.setPointerCapture(e.pointerId); card.classList.remove('anim');
-});
+  if(!revealed || e.button>0) return;
+  drag={x:e.clientX,id:e.pointerId}; dragDx=0; dragW=window.innerWidth;
+  try{ card.setPointerCapture(e.pointerId); }catch(_){}
+  card.classList.remove('anim');
+},{passive:true});
 card.addEventListener('pointermove',e=>{
-  if(!drag) return;
-  drag.dx=e.clientX-drag.x;
-  card.style.transform=`translateX(${drag.dx}px) rotate(${drag.dx*0.06}deg)`;
-  const p=Math.min(1,Math.abs(drag.dx)/110);
-  $('stamp-yes').style.opacity=drag.dx>0?p:0;
-  $('stamp-no').style.opacity=drag.dx<0?p:0;
-});
-function endDrag(){
-  if(!drag) return;
-  const dx=drag.dx; drag=null; card.classList.add('anim');
-  if(Math.abs(dx)>100){
+  if(!drag || e.pointerId!==drag.id) return;
+  dragDx=e.clientX-drag.x;
+  if(!dragRaf) dragRaf=requestAnimationFrame(paintDrag);
+},{passive:true});
+function endDrag(e){
+  if(!drag || (e && e.pointerId!==drag.id)) return;
+  const dx=dragDx; drag=null;
+  if(dragRaf){ cancelAnimationFrame(dragRaf); dragRaf=0; }
+  card.classList.add('anim');
+  if(Math.abs(dx)>90){
     const dir=dx>0?1:-1;
-    card.style.transform=`translateX(${dir*(window.innerWidth+80)}px) rotate(${dir*22}deg)`;
+    card.style.transform=`translate3d(${dir*(dragW+80)}px,0,0) rotate(${dir*20}deg)`;
     card.style.opacity='0';
-    setTimeout(()=>grade(dir>0?2:0),220);
-  }else{ card.style.transform=''; $('stamp-yes').style.opacity=0; $('stamp-no').style.opacity=0; }
+    setTimeout(()=>grade(dir>0?2:0),200);
+  }else{
+    card.style.transform='translate3d(0,0,0)';
+    stampYes.style.opacity=0; stampNo.style.opacity=0;
+  }
 }
 card.addEventListener('pointerup',endDrag);
 card.addEventListener('pointercancel',endDrag);
