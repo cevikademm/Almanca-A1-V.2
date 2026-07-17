@@ -1,9 +1,8 @@
 // ============ UYGULAMA MANTIĞI ============
 const N = WORDS.length;
-const BOX_DAYS = [0,0,1,3,7,14];
-const MASTER_BOX = 5;
-const MIN_REPS = 50;        // bir kelime "öğrenildi" olmadan önce en az 50 kez sorulur
-const WRONG_TRIGGER = 5;    // üst üste 5 hata → o kelimenin grubu tekrar sorulur
+const BOX_DAYS = [1,1,3,7,14,30];   // kutu 0..5 → sonraki tekrara kaç gün (aralıklı tekrar)
+const MASTER_BOX = 5;               // box > 5 → öğrenildi (tekrar planından çıkar)
+const NEW_PER_DAY = 20;             // İlk hedef: günde 20 yeni kelime (sabit günlük grup)
 const KEY = 'a1de_v2';
 let S=null, mem=false;
 
@@ -130,13 +129,10 @@ function freshState(){
   return {box:new Array(N).fill(-1), due:new Array(N).fill(0), seen:new Array(N).fill(0),
     wrong:new Array(N).fill(0), correct:new Array(N).fill(0),
     artSeen:new Array(N).fill(0), artWrong:new Array(N).fill(0),
-    newPerDay:20, dir:'de', intensity:'yogun', order:shuffled(N),
+    newPerDay:NEW_PER_DAY, dir:'de', order:shuffled(N),
     read:[], startDate:Date.now(), lastIntro:'', introToday:0};
 }
-const REP={ normal:{yeni:3,yanlis:3,zor:2,rev:[2,2,1,1,1,1]},
-            yogun: {yeni:4,yanlis:4,zor:2,rev:[3,2,2,1,1,1]},
-            max:   {yeni:6,yanlis:5,zor:3,rev:[4,3,2,2,1,1]} };
-function cfg(){ return REP[S.intensity]||REP.yogun; }
+/* Model: her gün 20 yeni kelime + günü gelen tekrarlar; oturum içi drilling/bonus YOK. */
 
 const hasArtifactStore = typeof window.storage!=='undefined' && window.storage && typeof window.storage.get==='function';
 function lsGet(){ try{return localStorage.getItem(KEY);}catch(e){return null;} }
@@ -147,7 +143,11 @@ function migrate(){
   if(!Array.isArray(S.artSeen)||S.artSeen.length!==N) S.artSeen=new Array(N).fill(0);
   if(!Array.isArray(S.artWrong)||S.artWrong.length!==N) S.artWrong=new Array(N).fill(0);
   if(!Array.isArray(S.read)) S.read=[];
-  if(!S.intensity) S.intensity='yogun';
+  if(S.dir!=='de'&&S.dir!=='tr'&&S.dir!=='mix') S.dir='de';
+  if(typeof S.introToday!=='number'||S.introToday<0) S.introToday=0;
+  if(typeof S.lastIntro!=='string') S.lastIntro='';
+  S.newPerDay=NEW_PER_DAY;                                 // günlük hedef sabit: 20 yeni kelime
+  if(S.introToday>NEW_PER_DAY) S.introToday=NEW_PER_DAY;   // eski 30/gün'den gelen taşmayı kırp
 }
 async function loadState(){
   if(hasArtifactStore){ try{ const r=await window.storage.get(KEY); if(r&&r.value){S=JSON.parse(r.value);migrate();return;} }catch(e){} }
@@ -180,18 +180,18 @@ function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.r
 function renderHome(){
   const {m,l,n}=counts();
   $('st-mastered').textContent=m; $('st-learning').textContent=l; $('st-new').textContent=n;
-  $('daybadge').textContent='Gün '+dayNo()+' / ~'+Math.ceil(N/S.newPerDay);
-  const rev=reviewsDue().length, nq=Math.min(newQuotaLeft(),n), total=rev+nq, C=cfg();
+  $('daybadge').textContent='Gün '+dayNo()+' / ~'+Math.ceil(N/NEW_PER_DAY);
+  const rev=reviewsDue().length, nq=Math.min(newQuotaLeft(),n), total=rev+nq;
   if(total===0){
     $('hero-title').textContent='Bugünlük tamam ✓';
-    $('hero-sub').textContent = m===N?'608 kelimenin tamamını öğrendin!':'Sıradaki tekrarlar zamanı gelince burada görünecek.';
+    $('hero-sub').textContent = m===N?'608 kelimenin tamamını öğrendin!':'Bugünün 20 kelimesi bitti. Sıradaki tekrarlar günü gelince burada belirir.';
     $('btn-start').disabled=true; $('btn-start').textContent='Beklenen kart yok';
   }else{
-    $('hero-title').textContent=rev+' tekrar + '+nq+' yeni kelime';
-    $('hero-sub').textContent='Kartlar rastgele karışır, aralara bonus tekrarlar girer. Her yeni kelime en az '+C.yeni+' kez doğru bilinmeden oturumdan çıkmaz.';
+    $('hero-title').textContent=(rev? rev+' tekrar + ':'')+nq+' yeni kelime';
+    $('hero-sub').textContent='Her kelime bir kez sorulur — oturum içinde tekrar yok. Öğrendiklerin sonraki günlerde tekrar planına düşer.';
     $('btn-start').disabled=false; $('btn-start').textContent='Oturuma başla ('+total+' kart)';
   }
-  const names=['Kutu 1 — yeni','Kutu 2 — 12 saat','Kutu 3 — 1 gün','Kutu 4 — 3 gün','Kutu 5 — 1 hafta','Kutu 6 — 2 hafta','Öğrenildi ★'];
+  const names=['Kutu 1 · yeni/yanlış','Kutu 2 · 1 gün','Kutu 3 · 3 gün','Kutu 4 · 1 hafta','Kutu 5 · 2 hafta','Kutu 6 · 1 ay','Öğrenildi ★'];
   const colors=['#DC2626','#EA580C','#D97706','#65A30D','#16A34A','#0D9488','#B8860B'];
   const dist=new Array(7).fill(0);
   for(let i=0;i<N;i++){ if(S.box[i]===-1) continue; dist[Math.min(6, isMastered(i)?6:S.box[i])]++; }
@@ -199,110 +199,47 @@ function renderHome(){
   for(let b=0;b<7;b++){ const pct=N?(dist[b]/N*100):0;
     html+=`<div class="boxrow"><div class="bl">${names[b]}</div><div class="bar"><i style="width:${pct}%;background:${colors[b]}"></i></div><div class="bn">${dist[b]}</div></div>`; }
   $('boxes').innerHTML=html;
-  const daysAll=Math.ceil(N/S.newPerDay);
-  const iname = S.intensity==='max'?'Maksimum':S.intensity==='normal'?'Normal':'Yoğun';
+  const daysAll=Math.ceil(N/NEW_PER_DAY);
   $('planbox').innerHTML=
-    `<b>Hedef:</b> 608 A1 kelimesinin tamamı, gramer ve örnek cümlelerle.<br>`+
-    `<b>Sıra:</b> Kelimeler alfabetik değil, sana özel <b>rastgele</b> sırayla gelir. Oturum sonunda kartlar birbirini kovalamasın diye aralara <b>bonus tekrar kartları</b> karışır.<br>`+
-    `<b>Tempo:</b> Günde ${S.newPerDay} yeni kelime → yeni kelimeler <b>~${daysAll} günde</b> biter.<br>`+
-    `<b>Oturum içi tekrar (${iname}):</b> yeni kelime <b>${C.yeni} doğru</b>, bilemediğin kelime <b>${C.yanlis} üst üste doğru</b>, zor bildiğin <b>${C.zor} doğru</b> gerektirir.<br>`+
-    `<b>${MIN_REPS} tekrar kuralı:</b> Bir kelime hayatı boyunca <b>en az ${MIN_REPS} kez</b> sorulmadan "öğrenildi" sayılmaz — kutuları erken bitirse bile geri gönderilir.<br>`+
-    `<b>Grup tekrarı:</b> Bir kelimeyi üst üste <b>${WRONG_TRIGGER} kez</b> bilemezsen, aynı türden (fiil, isim…) kelimeler kuyruğa geri eklenir ve o grubu baştan tararsın.<br>`+
-    `<b>Günler arası:</b> 12 saat → 1 gün → 3 gün → 1 hafta → 2 hafta. Her hata kelimeyi 1. kutuya döndürür.`;
-  document.querySelectorAll('#seg-new button').forEach(b=>b.classList.toggle('on',+b.dataset.v===S.newPerDay));
+    `<b>Hedef:</b> Günde <b>${NEW_PER_DAY} yeni kelime</b> — 608 A1 kelimesi ~<b>${daysAll} günde</b> biter.<br>`+
+    `<b>Günlük grup:</b> Her gün sana özel sabit sırayla ${NEW_PER_DAY}'lik bir kelime grubu gelir.<br>`+
+    `<b>Oturum içi tekrar YOK:</b> Bir kelime aynı oturumda yalnızca <b>1 kez</b> sorulur; üst üste drilling/bonus yoktur.<br>`+
+    `<b>Aralıklı tekrar (günler arası):</b> Öğrendiğin her kelime tekrar planına girer: <b>1 gün → 3 gün → 1 hafta → 2 hafta → 1 ay</b>. Doğru bildikçe ilerler, yanlışta başa döner. Tümü <b>"Tekrar listesi"</b>nde görünür.<br>`+
+    `<b>Öğrenildi:</b> Tüm aralıkları geçen kelime (6. kutu) "öğrenildi" olur ve tekrar planından çıkar.`;
   document.querySelectorAll('#seg-dir button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.dir));
-  document.querySelectorAll('#seg-int button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.intensity));
 }
 
-/* ---------- OTURUM MOTORU ---------- */
-let Q=[], sessDone=0, sessCorrect=0, sessGraded=0, sessUp=0, cur=null, curDir='de', revealed=false, cardNo=0;
-let bonusBudget=0, drillBudget=0;   // oturum sonsuza kadar uzamasın diye sınırlar
-const needStreak={}, failedNow={}, wrongStreak={};
-let doneThisSession=[];
-
-function inQueue(i){ return Q.some(x=>x.i===i); }
-function bonusPool(){
-  const pool = doneThisSession.filter(i=>!inQueue(i));
-  if(pool.length >= 3) return pool;
-  const extra=[]; for(let i=0;i<N;i++) if(S.box[i]>=1 && !inQueue(i) && !pool.includes(i)) extra.push(i);
-  for(let k=extra.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[extra[k],extra[j]]=[extra[j],extra[k]];}
-  return pool.concat(extra.slice(0,12));
-}
-function addBonus(n){
-  if(bonusBudget<=0) return 0;
-  const pool=bonusPool(); let added=0;
-  for(let k=0;k<n && pool.length && bonusBudget>0;k++){
-    const idx=Math.floor(Math.random()*pool.length);
-    const i=pool.splice(idx,1)[0];
-    Q.splice(Math.floor(Math.random()*(Q.length+1)),0,{i,kind:'bonus'});
-    bonusBudget--; added++;
-  }
-  return added;
-}
-/* Kartı kuyruğa geri koy — asla arka arkaya aynı kart gelmesin, kuyruk kısaysa bonus ile doldur */
-function reinsert(item,minGap){
-  if(Q.length < minGap+1) addBonus(minGap+2-Q.length);
-  const lo=Math.min(minGap, Q.length);
-  const hi=Math.min(Q.length, lo+4);
-  const pos=lo+Math.floor(Math.random()*(hi-lo+1));
-  Q.splice(pos,0,item);
-}
-/* Kuyruğun kuyruk kısmını periyodik olarak yeniden karıştır */
-function reshuffleTail(){
-  if(Q.length<4) return;
-  const head=Q.slice(0,2), tail=Q.slice(2);
-  for(let k=tail.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[tail[k],tail[j]]=[tail[j],tail[k]];}
-  Q=head.concat(tail);
-}
-/* Aynı türden kelimeleri gruba geri getir */
-function groupDrill(i){
-  if(drillBudget<=0) return;
-  drillBudget--;
-  const c=WORDS[i].c;
-  const cand=[]; for(let k=0;k<N;k++) if(k!==i && WORDS[k].c===c && S.box[k]>=0 && !inQueue(k)) cand.push(k);
-  for(let k=cand.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[cand[k],cand[j]]=[cand[j],cand[k]];}
-  const pick=cand.slice(0, Math.min(8, Math.max(0, bonusBudget)));
-  pick.forEach(k=>{ Q.splice(Math.floor(Math.random()*(Q.length+1)),0,{i:k,kind:'bonus'}); bonusBudget--; });
-  if(pick.length) toast('🔁 '+CATS[c]+' grubundan '+pick.length+' kelime tekrar kuyruğa eklendi');
-}
+/* ---------- OTURUM MOTORU (aralıklı tekrar; oturum içi tekrar YOK) ---------- */
+let Q=[], sessDone=0, sessCorrect=0, sessGraded=0, sessUp=0, cur=null, curDir='de', revealed=false;
 
 function buildSession(){
+  if(S.lastIntro!==todayKey()){ S.lastIntro=todayKey(); S.introToday=0; }   // yeni günse günlük kotayı sıfırla
+  // Tekrar günü gelenler (önceki günlerden) + bugünün KALAN yeni kelimeleri — her biri yalnız 1 kez
   const rev=reviewsDue();
   for(let k=rev.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[rev[k],rev[j]]=[rev[j],rev[k]];}
   const news=newAvailable().slice(0, Math.min(newQuotaLeft(),N));
-  if(S.lastIntro!==todayKey()){ S.lastIntro=todayKey(); S.introToday=0; }
-  S.introToday+=news.length;
-  const merged=[...rev.map(i=>({i,kind:'rev'})), ...news.map(i=>({i,kind:'new'}))];
-  for(let k=merged.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[merged[k],merged[j]]=[merged[j],merged[k]];}
-  Q=merged; sessDone=0; sessCorrect=0; sessGraded=0; sessUp=0; cardNo=0; doneThisSession=[];
-  bonusBudget=Math.min(60, Math.max(10, Math.round(merged.length*0.8)));  // bonus kart tavanı
-  drillBudget=3;                                                          // grup tekrarı en fazla 3 kez
-  for(const k in needStreak) delete needStreak[k];
-  for(const k in failedNow) delete failedNow[k];
-  for(const k in wrongStreak) delete wrongStreak[k];
+  // NOT: introToday burada DEĞİL, kelime gerçekten çalışıldığında (grade) artırılır —
+  // böylece oturum yarıda bırakılınca günlük kota yanmaz, aynı gün kaldığın yerden devam edersin.
+  Q=[...rev.map(i=>({i,kind:'rev'})), ...news.map(i=>({i,kind:'new'}))];   // önce tekrar turu, sonra günün yeni kelimeleri
+  sessDone=0; sessCorrect=0; sessGraded=0; sessUp=0;
 }
 
 function nextCard(){
   if(Q.length===0){ finishSession(); return; }
-  cardNo++;
-  if(cardNo%7===0) reshuffleTail();
   cur=Q.shift(); revealed=false;
   const w=WORDS[cur.i], g=parseWord(w);
   curDir = S.dir==='mix' ? (Math.random()<0.5?'de':'tr') : S.dir;
-  if(cur.kind==='new' && S.seen[cur.i]===0) curDir='de';
+  if(cur.kind==='new') curDir='de';   // yeni kelime ilk kez daima DE→TR gösterilir
 
   const card=$('card');
   card.classList.remove('anim'); card.style.transform=''; card.style.opacity='1';
   $('stamp-yes').style.opacity=0; $('stamp-no').style.opacity=0;
-  $('ribbon').style.background = w.a?`var(--${w.a})`:'var(--none)';
+  // TR→DE'de artikeli ele vermemek için ribbon nötr; cevap açılınca (reveal) gerçek renge döner
+  $('ribbon').style.background = (curDir==='de' && w.a) ? `var(--${w.a})` : 'var(--none)';
 
-  if(cur.kind==='bonus'){ $('tag-status').innerHTML='<span class="bonus">★ Bonus tekrar</span>'; }
-  else if(cur.kind==='new' && S.seen[cur.i]===0){ $('tag-status').textContent='Yeni kelime'; }
-  else { $('tag-status').textContent='Kutu '+(Math.min(S.box[cur.i],5)+1); }
-
-  const left=needStreak[cur.i];
-  $('tag-times').textContent = (left>0 && cur.kind!=='bonus') ? ('bitmesi için '+left+' doğru')
-    : (S.seen[cur.i]>0 ? S.seen[cur.i]+'/'+MIN_REPS+' tekrar' : '');
+  if(cur.kind==='new'){ $('tag-status').textContent='Yeni kelime'; }
+  else { $('tag-status').innerHTML='<span class="bonus">↻ Tekrar</span>'; }
+  $('tag-times').textContent = cur.kind==='new' ? '' : ('Kutu '+(Math.min(S.box[cur.i],5)+1));
 
   if(curDir==='de'){
     $('c-art').textContent=w.a; $('c-art').className='art '+(w.a?'artbig '+w.a:'');
@@ -340,59 +277,47 @@ function nextCard(){
 }
 function reveal(){
   if(revealed) return; revealed=true;
+  const w=WORDS[cur.i];
+  $('ribbon').style.background = w.a?`var(--${w.a})`:'var(--none)';   // cevapta artikel rengini göster
   $('c-answer').classList.add('show');
   $('taphint').style.display='none';
   $('showrow').style.display='none';
   $('swipe-hints').classList.remove('hidden');
 }
 
+/* Not değerlendirme — kart kuyruğa GERİ EKLENMEZ (oturum içi tekrar yok).
+   Sonuç yalnızca aralıklı tekrar zamanlamasını (kutu + due) belirler. */
 async function grade(g){
-  const i=cur.i, C=cfg();
+  const i=cur.i;
   S.seen[i]++; sessGraded++;
-
-  if(cur.kind==='bonus'){
-    if(g===2){ sessCorrect++; S.correct[i]++; wrongStreak[i]=0; }
-    else if(g===1){ sessCorrect++; needStreak[i]=C.zor; cur.kind='rev'; reinsert(cur,6); }
-    else{ S.wrong[i]++; S.box[i]=0; failedNow[i]=1; needStreak[i]=Math.min(C.yanlis,2);
-          wrongStreak[i]=(wrongStreak[i]||0)+1; cur.kind='rev'; reinsert(cur,3);
-          if(wrongStreak[i]>=WRONG_TRIGGER){ wrongStreak[i]=0; groupDrill(i); } }
-    nextCard(); saveSoon(); return;
-  }
-
   const firstEver = S.box[i]===-1;
   if(firstEver) S.box[i]=0;
-
-  function finalize(){
-    if(failedNow[i]||firstEver){ S.box[i]=1; S.due[i]=Date.now()+12*3600*1000; }
-    else{
-      S.box[i]=Math.min(S.box[i]+1, MASTER_BOX+1); sessUp++;
-      if(isMastered(i)){
-        if(S.seen[i] < MIN_REPS){                 // 50 tekrar kuralı (MIN_REPS)
-          S.box[i]=4; S.due[i]=Date.now()+7*86400000;
-          toast('Neredeyse! '+display(WORDS[i])+' için '+(MIN_REPS-S.seen[i])+' tekrar daha gerek');
-        }else{ S.due[i]=0; toast('★ Öğrenildi: '+(WORDS[i].a?WORDS[i].a+' ':'')+display(WORDS[i])); }
-      }else S.due[i]=Date.now()+BOX_DAYS[S.box[i]]*86400000;
-    }
-    if(!doneThisSession.includes(i)) doneThisSession.push(i);
-    sessDone++;
+  if(cur.kind==='new'){            // yeni kelime gerçekten çalışıldı → günlük 20 kotasını ilerlet
+    if(S.lastIntro!==todayKey()){ S.lastIntro=todayKey(); S.introToday=0; }
+    S.introToday++;
   }
 
-  if(g===2){
-    sessCorrect++; S.correct[i]++; wrongStreak[i]=0;
-    if(needStreak[i]===undefined) needStreak[i]=(firstEver?C.yeni:C.rev[Math.min(S.box[i],5)])-1;
-    else needStreak[i]--;
-    if(needStreak[i]>0) reinsert(cur,5); else finalize();
-  }else if(g===1){
-    sessCorrect++; wrongStreak[i]=0;
-    needStreak[i]=Math.max(needStreak[i]||0, C.zor);
-    reinsert(cur,6);
+  if(g===2){                       // Bildim → bir üst kutu
+    sessCorrect++; S.correct[i]++;
+    S.box[i]=Math.min(S.box[i]+1, MASTER_BOX+1);
+    if(!firstEver) sessUp++;
+  }else if(g===1){                 // Zor bildim → kutu sabit (min 1), yarın tekrar
+    sessCorrect++;
+    S.box[i]=Math.max(S.box[i],1);
+  }else{                           // Bilemedim → başa dön (kutu 0), yarın tekrar
+    S.wrong[i]++; S.box[i]=0;
+  }
+
+  // Öğrenilen/çalışılan her kelime tekrar planına girer (due mutlaka set edilir)
+  if(isMastered(i)){
+    S.due[i]=0;
+    toast('★ Öğrenildi: '+(WORDS[i].a?WORDS[i].a+' ':'')+display(WORDS[i]));
   }else{
-    S.wrong[i]++; S.box[i]=0; failedNow[i]=1;
-    needStreak[i]=C.yanlis;
-    wrongStreak[i]=(wrongStreak[i]||0)+1;
-    reinsert(cur,3);
-    if(wrongStreak[i]>=WRONG_TRIGGER){ wrongStreak[i]=0; groupDrill(i); }
+    const days=(g===2)?BOX_DAYS[Math.min(S.box[i],BOX_DAYS.length-1)]:1;   // doğru→kutu aralığı, yanlış/zor→yarın
+    S.due[i]=Date.now()+days*86400000;
   }
+
+  sessDone++;
   nextCard(); saveSoon();
 }
 
@@ -401,7 +326,7 @@ function finishSession(){
   $('d-acc').textContent=sessGraded?Math.round(sessCorrect/sessGraded*100)+'%':'–';
   $('d-up').textContent=sessUp;
   const {m}=counts();
-  $('d-msg').textContent=m+' / '+N+' kelime tamamen öğrenildi. Yarın tekrarların hazır olacak — düzenli gelmek ezberin anahtarı.';
+  $('d-msg').textContent='Bugünün kartları bitti. Öğrendiklerin tekrar planına eklendi — yarın tekrarları hazır olacak. '+m+' / '+N+' kelime öğrenildi.';
   show('scr-done');
 }
 
@@ -468,20 +393,22 @@ function renderList(){
   }
   let idx=[...Array(N).keys()];
   if(listTab==='ogrendim') idx=idx.filter(i=>isMastered(i));
-  else if(listTab==='bilmiyorum') idx=idx.filter(i=>!isMastered(i)&&(S.wrong[i]>0||S.box[i]>=0));
+  else if(listTab==='tekrar') idx=idx.filter(i=>S.box[i]>=0 && !isMastered(i));   // tekrar planındaki kelimeler
   if(listCat!=='hepsi') idx=idx.filter(i=>WORDS[i].c===listCat);
   if(listQ){
     const q=listQ.toLowerCase();
     idx=idx.filter(i=>(WORDS[i].w+' '+WORDS[i].a+' '+WORDS[i].t).toLowerCase().includes(q));
   }
-  if(listTab==='bilmiyorum') idx.sort((a,b)=>S.wrong[b]-S.wrong[a]);
+  if(listTab==='tekrar') idx.sort((a,b)=>(S.due[a]||0)-(S.due[b]||0));   // tekrar günü en yakın önce
   else idx.sort((a,b)=>display(WORDS[a]).localeCompare(display(WORDS[b]),'de'));
 
-  const label={ogrendim:'Öğrendiklerim',bilmiyorum:'Çalıştıklarım / zorlandıklarım',tum:'Tüm kelimeler'}[listTab];
+  const label={ogrendim:'Öğrendiklerim',tekrar:'Tekrar listesi',tum:'Tüm kelimeler'}[listTab];
   info.textContent=label+' — '+idx.length+' kelime';
   if(!idx.length){
     body.innerHTML='<div class="empty">'+(listTab==='ogrendim'
-      ? 'Henüz tamamen öğrenilmiş kelime yok.<br>Bir kelime tüm kutuları geçip en az '+MIN_REPS+' kez sorulunca buraya düşer.'
+      ? 'Henüz öğrenilmiş kelime yok.<br>Bir kelime tüm tekrar aralıklarını geçince (6. kutu) buraya düşer.'
+      : listTab==='tekrar'
+      ? 'Tekrar planında kelime yok.<br>Oturumda kelime öğrendikçe burada birikir.'
       : 'Bu filtreye uyan kelime yok.')+'</div>';
     return;
   }
@@ -489,9 +416,10 @@ function renderList(){
   body.innerHTML='<div class="wlist">'+idx.slice(0,400).map(i=>{
     const w=WORDS[i];
     const art=w.a?`<span class="art ${w.a}" style="font-size:15px">${w.a}</span> `:'';
+    const dueTxt=(S.box[i]<0||isMastered(i))?'':(()=>{ const d=Math.ceil((S.due[i]-Date.now())/86400000); return d<=0?'bugün tekrar':(d+' gün sonra'); })();
     const meta = isMastered(i) ? '★ öğrenildi<br>'+S.seen[i]+' tekrar'
       : S.box[i]<0 ? 'başlanmadı'
-      : 'Kutu '+(Math.min(S.box[i],5)+1)+'<br>'+S.seen[i]+' tekrar · '+S.wrong[i]+' hata';
+      : 'Kutu '+(Math.min(S.box[i],5)+1)+' · '+dueTxt+'<br>'+S.seen[i]+' tekrar · '+S.wrong[i]+' hata';
     return `<div class="witem"><div class="wrow" data-i="${i}"><div class="dot" style="background:${dot(i)}"></div>
       <div class="wd"><div class="de">${art}<em>${display(w)}</em></div><div class="tr">${w.t}</div></div>
       <div class="meta">${meta}</div><div class="wchev">›</div></div>
@@ -640,9 +568,7 @@ $('btn-show').onclick=reveal;
 $('btn-mid').onclick=()=>{ card.classList.add('anim'); card.style.transform='translateY(-40px)'; card.style.opacity='0'; setTimeout(()=>grade(1),200); };
 $('btn-back').onclick=()=>{ renderHome(); show('scr-home'); };
 $('btn-home').onclick=()=>{ renderHome(); show('scr-home'); };
-document.querySelectorAll('#seg-new button').forEach(b=>b.onclick=async()=>{ S.newPerDay=+b.dataset.v; await saveState(); renderHome(); });
 document.querySelectorAll('#seg-dir button').forEach(b=>b.onclick=async()=>{ S.dir=b.dataset.v; await saveState(); renderHome(); });
-document.querySelectorAll('#seg-int button').forEach(b=>b.onclick=async()=>{ S.intensity=b.dataset.v; await saveState(); renderHome(); });
 $('btn-reset').onclick=async()=>{ if(confirm('Tüm ilerleme silinsin mi? Bu geri alınamaz.')){ S=freshState(); await saveState(); renderHome(); toast('Sıfırlandı'); } };
 /* Artikel quiz butonları */
 $('ak-start').onclick=()=>{ buildArtikel(); if(AQ.length){ $('ak-home').style.display='none'; $('ak-quiz').style.display='block'; akNext(); } else toast('Sorulacak isim bulunamadı'); };

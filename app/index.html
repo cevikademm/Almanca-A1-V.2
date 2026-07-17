@@ -18,7 +18,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260710b">
+<link rel="stylesheet" href="css/style.css?v=20260717a">
 </head>
 <body>
 <div class="app">
@@ -45,12 +45,8 @@
   <div class="section-t">Ezber planın</div>
   <div class="planbox" id="planbox"></div>
   <div class="settings">
-    <div class="sl">Günlük yeni kelime</div>
-    <div class="seg" id="seg-new"><button data-v="10">10</button><button data-v="20">20</button><button data-v="30">30</button></div>
-  </div>
-  <div class="settings">
-    <div class="sl">Tekrar yoğunluğu</div>
-    <div class="seg" id="seg-int"><button data-v="normal">Normal</button><button data-v="yogun">Yoğun</button><button data-v="max">Maks.</button></div>
+    <div class="sl">Günlük hedef</div>
+    <div class="sv">20 yeni kelime / gün</div>
   </div>
   <div class="settings">
     <div class="sl">Soru yönü</div>
@@ -112,7 +108,7 @@
 <div class="screen" id="scr-lists">
   <div class="tabs" id="list-tabs">
     <button data-v="ogrendim" class="on">Öğrendiklerim</button>
-    <button data-v="bilmiyorum">Bilmediklerim</button>
+    <button data-v="tekrar">Tekrar listesi</button>
     <button data-v="tum">Tüm kelimeler</button>
   </div>
   <div class="chiprow" id="cat-chips"></div>
@@ -182,6 +178,6 @@
 </nav>
 <div class="toast" id="toast"></div>
 <script src="js/data.js?v=20260710b"></script>
-<script src="js/app.js?v=20260710b"></script>
+<script src="js/app.js?v=20260717a"></script>
 </body>
 </html>
