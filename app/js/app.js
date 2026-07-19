@@ -1,8 +1,10 @@
 // ============ UYGULAMA MANTIĞI ============
 const N = WORDS.length;
-const BOX_DAYS = [1,1,3,7,14,30];   // kutu 0..5 → sonraki tekrara kaç gün (aralıklı tekrar)
-const MASTER_BOX = 5;               // box > 5 → öğrenildi (tekrar planından çıkar)
-const NEW_PER_DAY = 20;             // İlk hedef: günde 20 yeni kelime (sabit günlük grup)
+const MASTER_BOX = 5;               // "öğrenildi" için kutu şartı (box > 5)
+const MIN_REPS = 50;                // bir kelime en az 50 kez sorulmadan "öğrenildi" sayılmaz
+const NEW_PER_DAY = 20;             // günde 20 yeni kelime → 608 kelime ~31 günde tanıtılır (1 ay)
+const REVIEW_PER_DAY = 10;          // sonraki günler: geçmiş kelimelerden 10 rastgele tekrar
+const SKIP_MS = 2*86400000;         // bugün sorulan kelime ertesi gün SORULMAZ (rotasyon: 1 gün atlar)
 const KEY = 'a1de_v2';
 let S=null, mem=false;
 
@@ -166,7 +168,7 @@ let _saveT=0;
 function saveSoon(){ if(_saveT) return; _saveT=setTimeout(()=>{ _saveT=0; saveState(); },0); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
 function dayNo(){ return Math.floor((Date.now()-S.startDate)/86400000)+1; }
-function isMastered(i){ return S.box[i]>MASTER_BOX; }
+function isMastered(i){ return S.box[i]>MASTER_BOX && S.seen[i]>=MIN_REPS; }   // 50 kez kuralı: kutu tamam + en az 50 tekrar
 function reviewsDue(){ const now=Date.now(),o=[]; for(let i=0;i<N;i++) if(S.box[i]>=0&&!isMastered(i)&&S.due[i]<=now) o.push(i); return o; }
 function newAvailable(){ return S.order.filter(i=>S.box[i]===-1); }
 function newQuotaLeft(){ return S.lastIntro!==todayKey()? S.newPerDay : Math.max(0,S.newPerDay-S.introToday); }
@@ -181,31 +183,31 @@ function renderHome(){
   const {m,l,n}=counts();
   $('st-mastered').textContent=m; $('st-learning').textContent=l; $('st-new').textContent=n;
   $('daybadge').textContent='Gün '+dayNo()+' / ~'+Math.ceil(N/NEW_PER_DAY);
-  const rev=reviewsDue().length, nq=Math.min(newQuotaLeft(),n), total=rev+nq;
+  const rev=Math.min(REVIEW_PER_DAY, reviewsDue().length), nq=Math.min(newQuotaLeft(),n), total=rev+nq;
   if(total===0){
     $('hero-title').textContent='Bugünlük tamam ✓';
-    $('hero-sub').textContent = m===N?'608 kelimenin tamamını öğrendin!':'Bugünün 20 kelimesi bitti. Sıradaki tekrarlar günü gelince burada belirir.';
+    $('hero-sub').textContent = m===N?'608 kelimenin tamamını öğrendin!':'Bugünlük bitti. Yarın '+NEW_PER_DAY+' yeni + '+REVIEW_PER_DAY+' tekrar hazır olacak.';
     $('btn-start').disabled=true; $('btn-start').textContent='Beklenen kart yok';
   }else{
     $('hero-title').textContent=(rev? rev+' tekrar + ':'')+nq+' yeni kelime';
-    $('hero-sub').textContent='Her kelime bir kez sorulur — oturum içinde tekrar yok. Öğrendiklerin sonraki günlerde tekrar planına düşer.';
+    $('hero-sub').textContent='Günde '+NEW_PER_DAY+' yeni + geçmişten '+REVIEW_PER_DAY+' rastgele tekrar. Bir kelime '+MIN_REPS+' kez sorulunca "öğrenildi" olur.';
     $('btn-start').disabled=false; $('btn-start').textContent='Oturuma başla ('+total+' kart)';
   }
-  const names=['Kutu 1 · yeni/yanlış','Kutu 2 · 1 gün','Kutu 3 · 3 gün','Kutu 4 · 1 hafta','Kutu 5 · 2 hafta','Kutu 6 · 1 ay','Öğrenildi ★'];
+  const names=['Kutu 1 · yeni/yanlış','Kutu 2','Kutu 3','Kutu 4','Kutu 5','Kutu 6','Öğrenildi ★ ('+MIN_REPS+'×)'];
   const colors=['#DC2626','#EA580C','#D97706','#65A30D','#16A34A','#0D9488','#B8860B'];
   const dist=new Array(7).fill(0);
-  for(let i=0;i<N;i++){ if(S.box[i]===-1) continue; dist[Math.min(6, isMastered(i)?6:S.box[i])]++; }
+  for(let i=0;i<N;i++){ if(S.box[i]===-1) continue; dist[isMastered(i)?6:Math.min(5,S.box[i])]++; }
   let html='';
   for(let b=0;b<7;b++){ const pct=N?(dist[b]/N*100):0;
     html+=`<div class="boxrow"><div class="bl">${names[b]}</div><div class="bar"><i style="width:${pct}%;background:${colors[b]}"></i></div><div class="bn">${dist[b]}</div></div>`; }
   $('boxes').innerHTML=html;
   const daysAll=Math.ceil(N/NEW_PER_DAY);
   $('planbox').innerHTML=
-    `<b>Hedef:</b> Günde <b>${NEW_PER_DAY} yeni kelime</b> — 608 A1 kelimesi ~<b>${daysAll} günde</b> biter.<br>`+
-    `<b>Günlük grup:</b> Her gün sana özel sabit sırayla ${NEW_PER_DAY}'lik bir kelime grubu gelir.<br>`+
-    `<b>Oturum içi tekrar YOK:</b> Bir kelime aynı oturumda yalnızca <b>1 kez</b> sorulur; üst üste drilling/bonus yoktur.<br>`+
-    `<b>Aralıklı tekrar (günler arası):</b> Öğrendiğin her kelime tekrar planına girer: <b>1 gün → 3 gün → 1 hafta → 2 hafta → 1 ay</b>. Doğru bildikçe ilerler, yanlışta başa döner. Tümü <b>"Tekrar listesi"</b>nde görünür.<br>`+
-    `<b>Öğrenildi:</b> Tüm aralıkları geçen kelime (6. kutu) "öğrenildi" olur ve tekrar planından çıkar.`;
+    `<b>Hedef:</b> Günde <b>${NEW_PER_DAY} yeni kelime</b> — 608 A1 kelimesi ~<b>${daysAll} günde</b> tanıtılır (1 ay).<br>`+
+    `<b>Sonraki günler:</b> 20 yeni kelimeye ek olarak geçmiş kelimelerden <b>${REVIEW_PER_DAY} rastgele tekrar</b> gelir (~${NEW_PER_DAY+REVIEW_PER_DAY} kart/gün).<br>`+
+    `<b>Rotasyon:</b> Bugün sorulan bir kelime <b>ertesi gün tekrar sorulmaz</b> — böylece diğer kelimeler de sıraya girer, tüm geçmiş dönerek taranır.<br>`+
+    `<b>${MIN_REPS} kez kuralı:</b> Bir kelime <b>en az ${MIN_REPS} kez</b> sorulup kutuları tamamlamadan "öğrenildi" sayılmaz; o zamana kadar tekrar havuzunda kalır (kartta <b>"x/${MIN_REPS} tekrar"</b> görünür).<br>`+
+    `<b>Öğrenildi:</b> ${MIN_REPS} tekrarı geçen kelime tekrar havuzundan çıkar. Tümü <b>"Tekrar listesi"</b>nde izlenir.`;
   document.querySelectorAll('#seg-dir button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.dir));
 }
 
@@ -214,13 +216,14 @@ let Q=[], sessDone=0, sessCorrect=0, sessGraded=0, sessUp=0, cur=null, curDir='d
 
 function buildSession(){
   if(S.lastIntro!==todayKey()){ S.lastIntro=todayKey(); S.introToday=0; }   // yeni günse günlük kotayı sıfırla
-  // Tekrar günü gelenler (önceki günlerden) + bugünün KALAN yeni kelimeleri — her biri yalnız 1 kez
-  const rev=reviewsDue();
-  for(let k=rev.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[rev[k],rev[j]]=[rev[j],rev[k]];}
+  // Geçmiş kelimelerden UYGUN olanlar (bugün/dün sorulmayanlar) → RASTGELE 10 tanesini seç
+  const pool=reviewsDue();
+  for(let k=pool.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[pool[k],pool[j]]=[pool[j],pool[k]];}
+  const rev=pool.slice(0, REVIEW_PER_DAY);
+  // Bugünün kalan yeni kelimeleri (kota grade'te düşer → yarım oturum kotayı yakmaz)
   const news=newAvailable().slice(0, Math.min(newQuotaLeft(),N));
-  // NOT: introToday burada DEĞİL, kelime gerçekten çalışıldığında (grade) artırılır —
-  // böylece oturum yarıda bırakılınca günlük kota yanmaz, aynı gün kaldığın yerden devam edersin.
-  Q=[...rev.map(i=>({i,kind:'rev'})), ...news.map(i=>({i,kind:'new'}))];   // önce tekrar turu, sonra günün yeni kelimeleri
+  Q=[...rev.map(i=>({i,kind:'rev'})), ...news.map(i=>({i,kind:'new'}))];
+  for(let k=Q.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[Q[k],Q[j]]=[Q[j],Q[k]];}   // yeni + tekrar iç içe karışır
   sessDone=0; sessCorrect=0; sessGraded=0; sessUp=0;
 }
 
@@ -239,7 +242,7 @@ function nextCard(){
 
   if(cur.kind==='new'){ $('tag-status').textContent='Yeni kelime'; }
   else { $('tag-status').innerHTML='<span class="bonus">↻ Tekrar</span>'; }
-  $('tag-times').textContent = cur.kind==='new' ? '' : ('Kutu '+(Math.min(S.box[cur.i],5)+1));
+  $('tag-times').textContent = cur.kind==='new' ? '' : (S.seen[cur.i]+'/'+MIN_REPS+' tekrar');
 
   if(curDir==='de'){
     $('c-art').textContent=w.a; $('c-art').className='art '+(w.a?'artbig '+w.a:'');
@@ -297,24 +300,25 @@ async function grade(g){
     S.introToday++;
   }
 
-  if(g===2){                       // Bildim → bir üst kutu
+  if(g===2){                       // Bildim → kutu +1
     sessCorrect++; S.correct[i]++;
     S.box[i]=Math.min(S.box[i]+1, MASTER_BOX+1);
     if(!firstEver) sessUp++;
-  }else if(g===1){                 // Zor bildim → kutu sabit (min 1), yarın tekrar
+  }else if(g===1){                 // Zor bildim → kutu sabit (min 1)
     sessCorrect++;
     S.box[i]=Math.max(S.box[i],1);
-  }else{                           // Bilemedim → başa dön (kutu 0), yarın tekrar
+  }else{                           // Bilemedim → kutu başa
     S.wrong[i]++; S.box[i]=0;
   }
 
-  // Öğrenilen/çalışılan her kelime tekrar planına girer (due mutlaka set edilir)
+  // 50 kez kuralı + rotasyon: 50 kez sorulup kutuyu tamamlayınca "öğrenildi"; aksi hâlde tekrar havuzunda kalır
   if(isMastered(i)){
-    S.due[i]=0;
-    toast('★ Öğrenildi: '+(WORDS[i].a?WORDS[i].a+' ':'')+display(WORDS[i]));
+    S.due[i]=0;                    // öğrenildi → tekrar havuzundan çıkar
+    toast('★ Öğrenildi ('+S.seen[i]+'×): '+(WORDS[i].a?WORDS[i].a+' ':'')+display(WORDS[i]));
   }else{
-    const days=(g===2)?BOX_DAYS[Math.min(S.box[i],BOX_DAYS.length-1)]:1;   // doğru→kutu aralığı, yanlış/zor→yarın
-    S.due[i]=Date.now()+days*86400000;
+    S.due[i]=Date.now()+SKIP_MS;   // bugün soruldu → ERTESİ GÜN sorulmaz; en erken 2 gün sonra tekrar havuzunda
+    if(S.box[i]>MASTER_BOX && S.seen[i]<MIN_REPS && S.seen[i]%10===0)
+      toast('Neredeyse! '+display(WORDS[i])+' için '+(MIN_REPS-S.seen[i])+' tekrar daha');
   }
 
   sessDone++;
@@ -406,9 +410,9 @@ function renderList(){
   info.textContent=label+' — '+idx.length+' kelime';
   if(!idx.length){
     body.innerHTML='<div class="empty">'+(listTab==='ogrendim'
-      ? 'Henüz öğrenilmiş kelime yok.<br>Bir kelime tüm tekrar aralıklarını geçince (6. kutu) buraya düşer.'
+      ? 'Henüz öğrenilmiş kelime yok.<br>Bir kelime '+MIN_REPS+' kez sorulup kutuları tamamlayınca buraya düşer.'
       : listTab==='tekrar'
-      ? 'Tekrar planında kelime yok.<br>Oturumda kelime öğrendikçe burada birikir.'
+      ? 'Tekrar havuzunda kelime yok.<br>Oturumda kelime çalıştıkça burada birikir.'
       : 'Bu filtreye uyan kelime yok.')+'</div>';
     return;
   }
@@ -416,10 +420,9 @@ function renderList(){
   body.innerHTML='<div class="wlist">'+idx.slice(0,400).map(i=>{
     const w=WORDS[i];
     const art=w.a?`<span class="art ${w.a}" style="font-size:15px">${w.a}</span> `:'';
-    const dueTxt=(S.box[i]<0||isMastered(i))?'':(()=>{ const d=Math.ceil((S.due[i]-Date.now())/86400000); return d<=0?'bugün tekrar':(d+' gün sonra'); })();
     const meta = isMastered(i) ? '★ öğrenildi<br>'+S.seen[i]+' tekrar'
       : S.box[i]<0 ? 'başlanmadı'
-      : 'Kutu '+(Math.min(S.box[i],5)+1)+' · '+dueTxt+'<br>'+S.seen[i]+' tekrar · '+S.wrong[i]+' hata';
+      : S.seen[i]+' / '+MIN_REPS+' tekrar<br>Kutu '+(Math.min(S.box[i],5)+1)+' · '+S.wrong[i]+' hata';
     return `<div class="witem"><div class="wrow" data-i="${i}"><div class="dot" style="background:${dot(i)}"></div>
       <div class="wd"><div class="de">${art}<em>${display(w)}</em></div><div class="tr">${w.t}</div></div>
       <div class="meta">${meta}</div><div class="wchev">›</div></div>
